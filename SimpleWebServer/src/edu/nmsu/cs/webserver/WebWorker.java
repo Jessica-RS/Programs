@@ -21,10 +21,7 @@ package edu.nmsu.cs.webserver;
  *
  **/
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.Socket;
 import java.text.DateFormat;
 import java.util.Date;
@@ -34,6 +31,7 @@ public class WebWorker implements Runnable
 {
 
 	private Socket socket;
+   private File file; 
 
 	/**
 	 * Constructor: must have a valid open socket
@@ -50,6 +48,7 @@ public class WebWorker implements Runnable
 	 **/
 	public void run()
 	{
+   
 		System.err.println("Handling connection...");
 		try
 		{
@@ -63,7 +62,7 @@ public class WebWorker implements Runnable
 		}
 		catch (Exception e)
 		{
-			System.err.println("Output error: " + e);
+		e.printStackTrace();//	System.err.println("Output error: " + e);
 		}
 		System.err.println("Done handling connection.");
 		return;
@@ -74,25 +73,42 @@ public class WebWorker implements Runnable
 	 **/
 	private void readHTTPRequest(InputStream is)
 	{
+      
 		String line;
-		BufferedReader r = new BufferedReader(new InputStreamReader(is));
-		while (true)
+		BufferedReader read = new BufferedReader(new InputStreamReader(is));
+      
+		while (true) //appears to be infinite loop
 		{
 			try
 			{
-				while (!r.ready())
+				while (!read.ready())
 					Thread.sleep(1);
-				line = r.readLine();
-				System.err.println("Request line: (" + line + ")");
+				line = read.readLine();
+            System.err.println("Request line: (" + line + ")");
 				if (line.length() == 0)
 					break;
-			}
+            
+            if(line.substring(0, 4).equals("GET ")) {
+               String[] parts = line.split(" ");
+               String path = "." + parts[1];//gets file name
+               System.out.println(path);
+               if (path.equals("./")) {
+                  System.out.println("Success!");
+                  path = "./text.html"; //set accepted file name
+               }//end if
+               
+               file = new File(path);//set variable file to text.html
+               
+            }//end if
+			}//end try
+         
 			catch (Exception e)
 			{
 				System.err.println("Request error: " + e);
 				break;
-			}
-		}
+            
+			}//end catch
+		}//end while
 		return;
 	}
 
@@ -106,16 +122,23 @@ public class WebWorker implements Runnable
 	 **/
 	private void writeHTTPHeader(OutputStream os, String contentType) throws Exception
 	{
-		Date d = new Date();
+      
+		Date date = new Date();
 		DateFormat df = DateFormat.getDateTimeInstance();
-		df.setTimeZone(TimeZone.getTimeZone("GMT"));
-		os.write("HTTP/1.1 200 OK\n".getBytes());
+		df.setTimeZone(TimeZone.getTimeZone("GMT-7")); //set time zone to mountain time
+      
+      if(file.exists() && file.isFile()) {
+         os.write("HTTP/1.1 200 OK\n".getBytes()); //if file is found throw 200 ok
+      }//end if
+      
+      else {
+         os.write("HTTP/1.1 404 Not Found\n".getBytes()); //if file is not found throw 404 error
+      }//end else
+      
 		os.write("Date: ".getBytes());
-		os.write((df.format(d)).getBytes());
+		os.write((df.format(date)).getBytes());
 		os.write("\n".getBytes());
-		os.write("Server: Jon's very own server\n".getBytes());
-		// os.write("Last-Modified: Wed, 08 Jan 2003 23:11:55 GMT\n".getBytes());
-		// os.write("Content-Length: 438\n".getBytes());
+		os.write("Server: Jess's awesome server\n".getBytes()); //custom server name
 		os.write("Connection: close\n".getBytes());
 		os.write("Content-Type: ".getBytes());
 		os.write(contentType.getBytes());
@@ -132,9 +155,28 @@ public class WebWorker implements Runnable
 	 **/
 	private void writeContent(OutputStream os) throws Exception
 	{
-		os.write("<html><head></head><body>\n".getBytes());
-		os.write("<h3>My web server works!</h3>\n".getBytes());
-		os.write("</body></html>\n".getBytes());
-	}
-
+      //if file not found
+      if(!file.exists() || !file.isFile()) { 
+		   os.write("<html><head></head>".getBytes());
+		   os.write("<body><h1>Error 404 Page Not Found</h1></html>\n".getBytes());//write 404 error on webpage
+         return;
+      }//end if
+      
+      //if file is found successfully
+      else{
+         BufferedReader buff = new BufferedReader(new FileReader(file));
+         String sub;
+         Date date = new Date();
+         DateFormat df = DateFormat.getDateTimeInstance();
+         df.setTimeZone(TimeZone.getTimeZone("GMT-7"));
+         while ((sub = buff.readLine()) != null) {
+            sub = sub.replaceAll("<cs371date>", df.format(date)); //replace tags with date
+            sub = sub.replaceAll("<cs371server>", "Jess's Awesome Server");//replace tags with server name
+            os.write(sub.getBytes());//write date and server name
+         }//end while
+         
+         buff.close();
+         
+      }//end else
+	}//end writeContent
 } // end class
